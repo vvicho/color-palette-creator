@@ -9,4 +9,5 @@ export interface SavedPalette {
   colors: PaletteColor[];
   sourceText?: string;
   lastUpdated: string;
+  builtIn?: boolean;
 }

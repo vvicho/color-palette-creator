@@ -2,10 +2,12 @@ import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ColorCard } from './components/ColorCard';
 import { CodePaletteInput } from './components/CodePaletteInput';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { fetchColorName } from './services/colorApi';
+import { getCachedColorName, fetchColorName } from './services/colorApi';
+import { DEFAULT_BASE_PALETTE, DEFAULT_BASE_PALETTE_ID, DEFAULT_BASE_PALETTE_SOURCE } from './data/defaultPalette';
 import type { PaletteColor, SavedPalette } from './types';
 import { sortColorsByHue, sortColorsByLightness, sortColorsByName } from './utils/colorSort';
 import { parseHexInput } from './utils/hexParser';
+
 
 const STORAGE_KEYS = {
   library: 'spectrum-library',
@@ -98,7 +100,10 @@ const App = () => {
   const [colors, setColors] = useState<PaletteColor[]>([]);
   const [toast, setToast] = useState('');
   const [isLoadingNames, setIsLoadingNames] = useState(false);
-  const [savedPalettes, setSavedPalettes] = useLocalStorage<SavedPalette[]>(STORAGE_KEYS.library, []);
+  const [savedPalettes, setSavedPalettes] = useLocalStorage<SavedPalette[]>(
+    STORAGE_KEYS.library,
+    [DEFAULT_BASE_PALETTE],
+  );
   const [activePaletteId, setActivePaletteId] = useLocalStorage<string | null>(
     STORAGE_KEYS.activePaletteId,
     null,
@@ -440,25 +445,36 @@ const App = () => {
       showToast('Add colors before saving');
       return;
     }
-
-    const normalizedName = (paletteName.trim() || 'Untitled Palette').toLowerCase();
-    const existingByName = savedPalettes.find((palette) => palette.name.trim().toLowerCase() === normalizedName);
-    const id = existingByName?.id ?? createPaletteId();
+  
+    const trimmedName = paletteName.trim() || 'Untitled Palette';
+    const existingById = activePaletteId
+      ? savedPalettes.find((palette) => palette.id === activePaletteId) ?? null
+      : null;
+  
+    const isEditingBuiltIn = existingById?.builtIn === true;
+  
+    const shouldCreateNew = !existingById || isEditingBuiltIn;
+    const id = shouldCreateNew ? createPaletteId() : existingById.id;
+  
     const payload: SavedPalette = {
       id,
-      name: paletteName.trim() || 'Untitled Palette',
+      name: trimmedName,
       colors,
       sourceText: input,
       lastUpdated: new Date().toISOString(),
+      builtIn: false,
     };
-
+  
     setSavedPalettes((previous) => {
-      const withoutMatch = previous.filter((palette) => palette.id !== id);
-      return [payload, ...withoutMatch];
+      if (shouldCreateNew) {
+        return [payload, ...previous];
+      }
+  
+      return [payload, ...previous.filter((palette) => palette.id !== id)];
     });
-
+  
     setActivePaletteId(id);
-    showToast(existingByName ? 'Palette updated by name' : 'Palette saved');
+    showToast(shouldCreateNew ? 'Palette saved' : 'Palette updated');
   };
 
   const loadPalette = (palette: SavedPalette) => {
@@ -471,12 +487,40 @@ const App = () => {
   };
 
   const deletePalette = (paletteId: string, paletteNameValue: string) => {
-    setSavedPalettes((previous) => previous.filter((palette) => palette.id !== paletteId));
+    const palette = savedPalettes.find((item) => item.id === paletteId);
+    if (palette?.builtIn) {
+      showToast('Built-in palette cannot be deleted');
+      return;
+    }
+  
+    setSavedPalettes((previous) => previous.filter((item) => item.id !== paletteId));
     if (activePaletteId === paletteId) {
-      setActivePaletteId(null);
+      setActivePaletteId(DEFAULT_BASE_PALETTE_ID);
     }
     showToast(`Deleted "${paletteNameValue}"`);
   };
+
+  useEffect(() => {
+    setSavedPalettes((previous) => {
+      const alreadyExists = previous.some((palette) => palette.id === DEFAULT_BASE_PALETTE_ID);
+      if (alreadyExists) {
+        return previous;
+      }
+      return [DEFAULT_BASE_PALETTE, ...previous];
+    });
+  }, [setSavedPalettes]);
+
+  useEffect(() => {
+    if (!activePaletteId) {
+      setActivePaletteId(DEFAULT_BASE_PALETTE_ID);
+      return;
+    }
+  
+    const stillExists = savedPalettes.some((palette) => palette.id === activePaletteId);
+    if (!stillExists) {
+      setActivePaletteId(DEFAULT_BASE_PALETTE_ID);
+    }
+  }, [activePaletteId, savedPalettes, setActivePaletteId]);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -904,15 +948,21 @@ FFFFFF, E5E0D8; 4A443F #FFD700
                     <p className="truncate text-sm font-medium">{palette.name}</p>
                     <p className="text-xs text-slate-500">{palette.colors.length} colors</p>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => deletePalette(palette.id, palette.name)}
-                    className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
-                    aria-label={`Delete ${palette.name}`}
-                    title={`Delete ${palette.name}`}
-                  >
-                    Delete
-                  </button>
+                  {!palette.builtIn ? (
+  <button
+    type="button"
+    onClick={() => deletePalette(palette.id, palette.name)}
+    className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+    aria-label={`Delete ${palette.name}`}
+    title={`Delete ${palette.name}`}
+  >
+    Delete
+  </button>
+) : (
+  <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-xs font-semibold text-slate-500">
+    Built-in
+  </span>
+)}
                 </div>
               ))
             )}
