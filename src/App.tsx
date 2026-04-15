@@ -2,8 +2,8 @@ import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ColorCard } from './components/ColorCard';
 import { CodePaletteInput } from './components/CodePaletteInput';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { getCachedColorName, fetchColorName } from './services/colorApi';
-import { DEFAULT_BASE_PALETTE, DEFAULT_BASE_PALETTE_ID, DEFAULT_BASE_PALETTE_SOURCE } from './data/defaultPalette';
+import { fetchColorName } from './services/colorApi';
+import { DEFAULT_BASE_PALETTE, DEFAULT_BASE_PALETTE_ID } from './data/defaultPalette';
 import type { PaletteColor, SavedPalette } from './types';
 import { sortColorsByHue, sortColorsByLightness, sortColorsByName } from './utils/colorSort';
 import { parseHexInput } from './utils/hexParser';
@@ -949,22 +949,22 @@ FFFFFF, E5E0D8; 4A443F #FFD700
                     <p className="text-xs text-slate-500">{palette.colors.length} colors</p>
                   </button>
                   {!palette.builtIn ? (
-  <button
-    type="button"
-    onClick={() => deletePalette(palette.id, palette.name)}
-    className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
-    aria-label={`Delete ${palette.name}`}
-    title={`Delete ${palette.name}`}
-  >
-    Delete
-  </button>
-) : (
-  <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-xs font-semibold text-slate-500">
-    Built-in
-  </span>
-)}
-                </div>
-              ))
+                    <button
+                      type="button"
+                      onClick={() => deletePalette(palette.id, palette.name)}
+                      className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                      aria-label={`Delete ${palette.name}`}
+                      title={`Delete ${palette.name}`}
+                    >
+                      Delete
+                    </button>
+                  ) : (
+                    <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-xs font-semibold text-slate-500">
+                      Built-in
+                    </span>
+                  )}
+                  </div>
+                ))
             )}
           </div>
         </div>
