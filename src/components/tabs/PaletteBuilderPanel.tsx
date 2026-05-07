@@ -1,3 +1,4 @@
+import { type ChangeEvent } from 'react';
 import { ColorCard } from '../ColorCard';
 import { CodePaletteInput } from '../CodePaletteInput';
 import { HowToUsePanel } from '../HowToUsePanel';
@@ -10,6 +11,7 @@ type PaletteBuilderPanelProps = {
   setSortMode: (mode: SortMode) => void;
   isLoadingNames: boolean;
   onImportColors: () => void;
+  onImportPaletteFiles: (files: FileList | null) => void;
   onExportPalette: () => void;
   onClearWorkspace: () => void;
   paletteName: string;
@@ -28,6 +30,7 @@ export const PaletteBuilderPanel = ({
   setSortMode,
   isLoadingNames,
   onImportColors,
+  onImportPaletteFiles,
   onExportPalette,
   onClearWorkspace,
   paletteName,
@@ -82,6 +85,19 @@ FFFFFF, E5E0D8; 4A443F #FFD700
           >
             {isLoadingNames ? 'Resolving names...' : 'Import Colors'}
           </button>
+          <label className="cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50">
+            Import Palette Files
+            <input
+              type="file"
+              accept=".txt,text/plain"
+              multiple
+              className="sr-only"
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                onImportPaletteFiles(event.target.files);
+                event.target.value = '';
+              }}
+            />
+          </label>
           <button
             type="button"
             onClick={onExportPalette}

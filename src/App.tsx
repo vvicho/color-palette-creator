@@ -6,7 +6,7 @@ import { HarmonyAssistantPanel } from './components/tabs/HarmonyAssistantPanel';
 import { PaletteBuilderPanel } from './components/tabs/PaletteBuilderPanel';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { fetchColorName } from './services/colorApi';
-import { DEFAULT_BASE_PALETTE, DEFAULT_BASE_PALETTE_ID } from './data/defaultPalette';
+import { BUILT_IN_PALETTES, DEFAULT_BASE_PALETTE_ID } from './data/defaultPalette';
 import type { PaletteColor, SavedPalette, SortMode, WorkspaceTab } from './types';
 import { sortColorsByHue, sortColorsByLightness, sortColorsByName } from './utils/colorSort';
 import { contrastRatioHex } from './utils/colorSpace';
@@ -27,7 +27,7 @@ const App = () => {
   const [isLoadingNames, setIsLoadingNames] = useState(false);
   const [savedPalettes, setSavedPalettes] = useLocalStorage<SavedPalette[]>(
     STORAGE_KEYS.library,
-    [DEFAULT_BASE_PALETTE],
+    BUILT_IN_PALETTES,
   );
   const [activePaletteId, setActivePaletteId] = useLocalStorage<string | null>(
     STORAGE_KEYS.activePaletteId,
@@ -110,6 +110,59 @@ const App = () => {
     setIsLoadingNames(false);
     setColors(namedColors);
     showToast(`Loaded ${namedColors.length} colors`);
+  };
+
+  const importPaletteFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) {
+      showToast('No files selected');
+      return;
+    }
+
+    setIsLoadingNames(true);
+    const loadedPalettes = await Promise.all(
+      Array.from(files).map(async (file) => {
+        const text = await file.text();
+        const hexes = parseHexInput(text);
+        if (hexes.length === 0) {
+          return null;
+        }
+
+        const colorsWithNames = await Promise.all(
+          hexes.map(async (hex) => ({
+            hex,
+            name: await fetchColorName(hex),
+          })),
+        );
+
+        const fileNameWithoutExtension = file.name.replace(/\.[^/.]+$/, '').trim();
+        return {
+          id: createPaletteId(),
+          name: fileNameWithoutExtension || file.name || 'Imported Palette',
+          colors: colorsWithNames,
+          sourceText: text,
+          lastUpdated: new Date().toISOString(),
+          builtIn: false,
+        } satisfies SavedPalette;
+      }),
+    );
+
+    const validPalettes: SavedPalette[] = loadedPalettes.reduce<SavedPalette[]>((accumulator, palette) => {
+      if (palette) {
+        accumulator.push(palette);
+      }
+      return accumulator;
+    }, []);
+    setIsLoadingNames(false);
+
+    if (validPalettes.length === 0) {
+      showToast('No valid palettes found in selected files');
+      return;
+    }
+
+    setSavedPalettes((previous) => [...validPalettes, ...previous]);
+    setActivePaletteId(validPalettes[0].id);
+    setShowLibrary(true);
+    showToast(`Imported ${validPalettes.length} palette${validPalettes.length === 1 ? '' : 's'} to library`);
   };
 
   const exportPalette = async () => {
@@ -246,12 +299,15 @@ const App = () => {
   };
 
   useEffect(() => {
+    const builtInIds = new Set(BUILT_IN_PALETTES.map((palette) => palette.id));
     setSavedPalettes((previous) => {
-      const alreadyExists = previous.some((palette) => palette.id === DEFAULT_BASE_PALETTE_ID);
-      if (alreadyExists) {
-        return previous;
-      }
-      return [DEFAULT_BASE_PALETTE, ...previous];
+      const userPalettes = previous.filter((palette) => {
+        if (palette.builtIn) {
+          return false;
+        }
+        return !builtInIds.has(palette.id);
+      });
+      return [...BUILT_IN_PALETTES, ...userPalettes];
     });
   }, [setSavedPalettes]);
 
@@ -321,6 +377,7 @@ const App = () => {
             setSortMode={setSortMode}
             isLoadingNames={isLoadingNames}
             onImportColors={importColors}
+            onImportPaletteFiles={importPaletteFiles}
             onExportPalette={exportPalette}
             onClearWorkspace={clearWorkspace}
             paletteName={paletteName}
