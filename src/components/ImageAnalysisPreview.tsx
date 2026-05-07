@@ -7,6 +7,7 @@ type ImageAnalysisPreviewProps = {
   zoom: 1 | 2 | 4 | 8;
   highlightedHex: string | null;
   selectedHexes?: string[];
+  useSelectedSetOnly?: boolean;
   lockedHexes?: string[];
   frameRects?: SpriteFrameRect[];
   issueFrameIndexes?: number[];
@@ -30,6 +31,7 @@ export const ImageAnalysisPreview = ({
   zoom,
   highlightedHex,
   selectedHexes = [],
+  useSelectedSetOnly = false,
   lockedHexes = [],
   frameRects = [],
   issueFrameIndexes = [],
@@ -43,7 +45,7 @@ export const ImageAnalysisPreview = ({
   const highlightOverlayUrl = useMemo(() => {
     const lockedSet = new Set(lockedHexes.map((hex) => hex.toUpperCase()));
     const selectedSet = new Set(selectedHexes.map((hex) => hex.toUpperCase()));
-    if (highlightedHex) {
+    if (highlightedHex && !useSelectedSetOnly) {
       selectedSet.add(highlightedHex.toUpperCase());
     }
     if (selectedSet.size === 0 && lockedSet.size === 0) {
@@ -87,7 +89,7 @@ export const ImageAnalysisPreview = ({
     }
     context.putImageData(overlay, 0, 0);
     return canvas.toDataURL('image/png');
-  }, [highlightedHex, imageData, lockedHexes, selectedHexes]);
+  }, [highlightedHex, imageData, lockedHexes, selectedHexes, useSelectedSetOnly]);
 
   const scaledWidth = imageData.width * zoom;
   const scaledHeight = imageData.height * zoom;

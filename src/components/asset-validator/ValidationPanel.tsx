@@ -1,4 +1,5 @@
 import { ColorValidationList } from '../ColorValidationList';
+import { HowToUsePanel } from '../HowToUsePanel';
 import type { FrameConsistencyWarning } from '../../utils/animationConsistency';
 import type { ImageAnalysisResult } from '../../utils/imageColorAnalysis';
 import { ReadabilityAnalyzerPanel } from './ReadabilityAnalyzerPanel';
@@ -62,6 +63,16 @@ export const ValidationPanel = ({
   onHighlightColor,
 }: ValidationPanelProps) => (
   <div className="space-y-3">
+    <HowToUsePanel
+      className="how-to-use--validator-validation"
+      items={[
+        'Enable "Is sprite sheet" only for sheets; leave off for single sprites.',
+        'For sheets, set frame width/height (plus spacing/margin) to detect frame boundaries.',
+        'Click warning rows to jump to problematic frames; use "Show selected frame only" for focused checks.',
+        'Readability analysis below uses the selected frame when available.',
+      ]}
+    />
+
     <div className="rounded-lg border border-slate-200 p-3">
       <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
         <input type="checkbox" checked={isSpriteSheet} onChange={(event) => onSetIsSpriteSheet(event.target.checked)} />

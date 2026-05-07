@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { PaletteGroup } from '../../types';
 import { findClosestPaletteColors, findRampDuplicates } from '../../utils/paletteSimilarity';
+import { HowToUsePanel } from '../HowToUsePanel';
 import {
   evaluateRampHealth,
   generateRampFromBase,
@@ -130,6 +131,17 @@ export const PaletteAuthoringPanel = ({
           Save Current Palette
         </button>
       </div>
+
+      <HowToUsePanel
+        className="how-to-use--palette-authoring mb-4"
+        items={[
+          'Pick a seed color, then tune ramp size, contrast, shadow style, and saturation curve.',
+          'Review ramp warnings before adding to workspace to avoid muddy or duplicate ramps.',
+          'Use nearby suggestions to jump to existing project colors and keep palette cohesion.',
+          'Add Ramp To Workspace to merge generated colors; Save Current Palette to persist.',
+        ]}
+      />
+
       <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr_1fr]">
         <div className="space-y-3 rounded-lg border border-slate-200 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Seed Color Controls</p>

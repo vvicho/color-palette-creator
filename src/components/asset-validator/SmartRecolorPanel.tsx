@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ImageAnalysisResult } from '../../utils/imageColorAnalysis';
 import { generateRampRecolorMapping } from '../../utils/recolorMapping';
 import { detectRampFromSeed } from '../../utils/smartRampDetection';
+import { HowToUsePanel } from '../HowToUsePanel';
 
 type SmartRecolorPanelProps = {
   analysis: ImageAnalysisResult | null;
@@ -75,6 +76,16 @@ export const SmartRecolorPanel = ({
           Seed a source color, expand a probable ramp, choose a target seed, and generate a lightness-preserving recolor map.
         </p>
       </div>
+
+      <HowToUsePanel
+        className="how-to-use--smart-recolor"
+        items={[
+          'Click a swatch (or image pixel) to set source seed and select that color.',
+          'Shift+click adds to selection, Alt+click removes; the Select/Deselect buttons do the same explicitly.',
+          'Right-click a swatch or use Lock/Unlock to protect colors from remapping.',
+          'Use Expand Ramp to include nearby tones, then choose target seed and Generate Smart Mapping.',
+        ]}
+      />
 
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="rounded-lg border border-slate-200 p-2">

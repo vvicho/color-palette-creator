@@ -391,6 +391,7 @@ export const AssetValidatorPanel = ({ paletteHexes, activePaletteLabel, onToast 
                       zoom={zoom}
                       highlightedHex={highlightedHex}
                     selectedHexes={smartSelectedHexes}
+                    useSelectedSetOnly={activeMode === 'color-transform'}
                       lockedHexes={lockedHexes}
                       frameRects={showSelectedFrameOnly ? [] : spriteFrames}
                       issueFrameIndexes={showSelectedFrameOnly ? [] : issueFrameIndexes}
