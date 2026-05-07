@@ -3,17 +3,24 @@ export interface PaletteColor {
   name: string;
 }
 
+export interface PaletteGroup {
+  id: string;
+  name: string;
+  colorHexes: string[];
+}
+
 export interface SavedPalette {
   id: string;
   name: string;
   colors: PaletteColor[];
+  groups?: PaletteGroup[];
   sourceText?: string;
   lastUpdated: string;
   builtIn?: boolean;
 }
 
 export type SortMode = 'none' | 'hue' | 'lightness' | 'name';
-export type WorkspaceTab = 'palette' | 'contrast' | 'harmony';
+export type WorkspaceTab = 'palette' | 'authoring' | 'contrast' | 'harmony' | 'validator';
 export type CelToneCount = 2 | 3 | 4;
 export type RampSlot = 'shadow' | 'base' | 'light' | 'highlight';
 export type HarmonyExtraSlot = 'complementary' | 'analogousA' | 'analogousB';

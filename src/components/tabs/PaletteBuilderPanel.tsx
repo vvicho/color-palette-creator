@@ -1,8 +1,8 @@
-import { type ChangeEvent } from 'react';
+import { type ChangeEvent, useMemo, useState } from 'react';
 import { ColorCard } from '../ColorCard';
 import { CodePaletteInput } from '../CodePaletteInput';
 import { HowToUsePanel } from '../HowToUsePanel';
-import type { PaletteColor, SortMode } from '../../types';
+import type { PaletteColor, PaletteGroup, SortMode } from '../../types';
 
 type PaletteBuilderPanelProps = {
   input: string;
@@ -19,6 +19,12 @@ type PaletteBuilderPanelProps = {
   onSavePalette: () => void;
   displayColors: PaletteColor[];
   colors: PaletteColor[];
+  paletteGroups: PaletteGroup[];
+  onRegenerateGroups: () => void;
+  onRenameGroup: (groupId: string, name: string) => void;
+  onCreateGroup: () => void;
+  onDeleteGroup: (groupId: string) => void;
+  onMoveColorToGroup: (hex: string, groupId: string) => void;
   onCopyHex: (hex: string) => void;
   onExportPaletteImage: () => void;
 };
@@ -38,10 +44,21 @@ export const PaletteBuilderPanel = ({
   onSavePalette,
   displayColors,
   colors,
+  paletteGroups,
+  onRegenerateGroups,
+  onRenameGroup,
+  onCreateGroup,
+  onDeleteGroup,
+  onMoveColorToGroup,
   onCopyHex,
   onExportPaletteImage,
-}: PaletteBuilderPanelProps) => (
-  <div className="workspace-panel palette-builder-panel grid gap-4 sm:grid-cols-[1fr_220px]">
+}: PaletteBuilderPanelProps) => {
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [showGroupedView, setShowGroupedView] = useState(false);
+  const colorsByHex = useMemo(() => new Map(colors.map((color) => [color.hex, color])), [colors]);
+
+  return (
+    <div className="workspace-panel palette-builder-panel grid gap-4 sm:grid-cols-[1fr_220px]">
     <section className="palette-builder-panel__main min-w-0 space-y-4">
       <HowToUsePanel
         className="how-to-use--palette palette-builder-panel__howto"
@@ -137,10 +154,116 @@ FFFFFF, E5E0D8; 4A443F #FFD700
             Paste hex values and import to populate the workspace.
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {displayColors.map((color) => (
-              <ColorCard key={color.hex} color={color} onCopy={onCopyHex} />
-            ))}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowGroupedView(false)}
+                className={`rounded border px-3 py-1.5 text-xs font-semibold ${
+                  !showGroupedView
+                    ? 'border-sky-500 bg-sky-600 text-white'
+                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                Flat Grid
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowGroupedView(true)}
+                className={`rounded border px-3 py-1.5 text-xs font-semibold ${
+                  showGroupedView
+                    ? 'border-sky-500 bg-sky-600 text-white'
+                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                Grouped View
+              </button>
+            </div>
+
+            {!showGroupedView ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {displayColors.map((color) => (
+                  <ColorCard key={color.hex} color={color} onCopy={onCopyHex} />
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={onRegenerateGroups}
+                    className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-50"
+                  >
+                    Auto Group Colors
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onCreateGroup}
+                    className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-50"
+                  >
+                    Create Group
+                  </button>
+                </div>
+                {paletteGroups.map((group) => {
+                  const isCollapsed = collapsedGroups[group.id] ?? false;
+                  const groupColors = group.colorHexes.map((hex) => colorsByHex.get(hex)).filter(Boolean) as PaletteColor[];
+                  return (
+                    <div key={group.id} className="rounded-lg border border-slate-200 bg-slate-50/60 p-2">
+                      <div className="mb-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCollapsedGroups((previous) => ({ ...previous, [group.id]: !isCollapsed }))}
+                          className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold hover:bg-slate-50"
+                        >
+                          {isCollapsed ? 'Expand' : 'Collapse'}
+                        </button>
+                        <input
+                          value={group.name}
+                          onChange={(event) => onRenameGroup(group.id, event.target.value)}
+                          className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold"
+                        />
+                        <span className="rounded bg-white px-2 py-1 text-[10px] font-semibold text-slate-600">
+                          {groupColors.length} colors
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteGroup(group.id)}
+                          className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-700 hover:bg-rose-100"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                      {!isCollapsed ? (
+                        groupColors.length === 0 ? (
+                          <p className="rounded border border-dashed border-slate-300 bg-white p-3 text-xs text-slate-500">
+                            No colors in this group.
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {groupColors.map((color) => (
+                              <div key={`${group.id}-${color.hex}`} className="space-y-1">
+                                <ColorCard color={color} onCopy={onCopyHex} />
+                                <select
+                                  value={group.id}
+                                  onChange={(event) => onMoveColorToGroup(color.hex, event.target.value)}
+                                  className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+                                >
+                                  {paletteGroups.map((option) => (
+                                    <option key={`target-${group.id}-${option.id}`} value={option.id}>
+                                      Move to: {option.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -179,5 +302,6 @@ FFFFFF, E5E0D8; 4A443F #FFD700
         )}
       </div>
     </aside>
-  </div>
-);
+    </div>
+  );
+};

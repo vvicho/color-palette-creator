@@ -2,6 +2,7 @@ import type { SavedPalette } from '../types';
 import { sanitizeFileName } from '../constants';
 import { getCachedColorName } from '../services/colorApi';
 import { parseHexInput } from '../utils/hexParser';
+import { autoGroupPaletteColors } from '../utils/paletteGrouping';
 
 const paletteFiles = import.meta.glob('./palettes/*.txt', {
   query: '?raw',
@@ -31,6 +32,12 @@ export const BUILT_IN_PALETTES: SavedPalette[] = Object.entries(paletteFiles)
         hex,
         name: getCachedColorName(hex) ?? `#${hex}`,
       })),
+      groups: autoGroupPaletteColors(
+        parseHexInput(sourceText).map((hex) => ({
+          hex,
+          name: getCachedColorName(hex) ?? `#${hex}`,
+        })),
+      ),
       sourceText,
       lastUpdated: PALETTE_UPDATED_AT,
       builtIn: true,

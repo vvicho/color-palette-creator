@@ -3,6 +3,13 @@ import { CEL_EDGE_STRONG_RATIO, CEL_EDGE_WEAK_RATIO } from '../../constants';
 import type { CelToneCount, HarmonyRamp, HarmonySlot } from '../../types';
 import { contrastRatioHex } from '../../utils/colorSpace';
 import { closestPaletteHex, offsetHsvHex } from '../../utils/harmonyPalette';
+import {
+  PREVIEW_BACKGROUND_OPTIONS,
+  PREVIEW_TEMPLATE_OPTIONS,
+  renderPreviewTemplate,
+  type PreviewBackgroundPreset,
+  type PreviewTemplateId,
+} from '../../utils/previewTemplates';
 import { HowToUsePanel } from '../HowToUsePanel';
 
 type HarmonyAssistantPanelProps = {
@@ -27,6 +34,9 @@ export const HarmonyAssistantPanel = ({
   const [previewHighlightSize, setPreviewHighlightSize] = useState(50);
   /** 0 = smallest shadow band, 100 = largest */
   const [previewShadowSize, setPreviewShadowSize] = useState(50);
+  const [previewTemplate, setPreviewTemplate] = useState<PreviewTemplateId>('sphere');
+  const [previewScale, setPreviewScale] = useState<1 | 2 | 4 | 8>(4);
+  const [previewBackground, setPreviewBackground] = useState<PreviewBackgroundPreset>('neutral');
 
   useEffect(() => {
     if (masterPalette.length === 0) {
@@ -130,10 +140,8 @@ export const HarmonyAssistantPanel = ({
 
     const width = previewCanvasRef.current.width;
     const height = previewCanvasRef.current.height;
+    context.imageSmoothingEnabled = false;
     context.clearRect(0, 0, width, height);
-
-    context.fillStyle = '#1E1E2C';
-    context.fillRect(0, 0, width, height);
 
     const ramp = effectiveHarmonyRamp;
     const shades =
@@ -142,60 +150,17 @@ export const HarmonyAssistantPanel = ({
         : ramp.kind === '3'
           ? [`#${ramp.shadow}`, `#${ramp.base}`, `#${ramp.highlight}`]
           : [`#${ramp.shadow}`, `#${ramp.base}`, `#${ramp.light}`, `#${ramp.highlight}`];
-
-    /** Stronger than ±1 so sliders near 0/100 change the sphere a lot more */
-    const highlightDrive = ((previewHighlightSize - 50) / 50) * 1.65;
-    const shadowDrive = ((50 - previewShadowSize) / 50) * 1.65;
-
-    const bandIndex = (intensity: number) => {
-      if (ramp.kind === '2') {
-        const cut = 0.2 - highlightDrive * 0.26 - shadowDrive * 0.24;
-        return intensity > cut ? 1 : 0;
-      }
-      if (ramp.kind === '3') {
-        let hi = Math.min(0.998, 0.88 - highlightDrive * 0.26);
-        let lo = 0.14 - highlightDrive * 0.14 - shadowDrive * 0.26;
-        lo = Math.max(0.02, Math.min(lo, hi - 0.06));
-        hi = Math.max(lo + 0.06, hi);
-        if (intensity > hi) return 2;
-        if (intensity > lo) return 1;
-        return 0;
-      }
-      let hi = Math.min(0.998, 0.93 - highlightDrive * 0.26);
-      let mid = 0.82 - highlightDrive * 0.28;
-      let low = 0.22 - highlightDrive * 0.14 - shadowDrive * 0.32;
-      low = Math.max(0.02, Math.min(low, mid - 0.06));
-      mid = Math.max(low + 0.05, Math.min(mid, hi - 0.06));
-      hi = Math.max(mid + 0.05, hi);
-      if (intensity > hi) return 3;
-      if (intensity > mid) return 2;
-      if (intensity > low) return 1;
-      return 0;
-    };
-
-    const centerX = width / 2;
-    const centerY = height / 2 + 4;
-    const radius = 56;
-    const lightX = -0.7;
-    const lightY = -0.7;
-
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const dx = (x - centerX) / radius;
-        const dy = (y - centerY) / radius;
-        const distanceSquared = dx * dx + dy * dy;
-        if (distanceSquared > 1) {
-          continue;
-        }
-
-        const dz = Math.sqrt(1 - distanceSquared);
-        const intensity = dx * lightX + dy * lightY + dz * 0.9;
-        const shadeIndex = bandIndex(intensity);
-        context.fillStyle = shades[shadeIndex] ?? shades[0];
-        context.fillRect(x, y, 1, 1);
-      }
-    }
-  }, [effectiveHarmonyRamp, previewHighlightSize, previewShadowSize]);
+    renderPreviewTemplate({
+      context,
+      width,
+      height,
+      template: previewTemplate,
+      shades,
+      background: previewBackground,
+      highlightSize: previewHighlightSize,
+      shadowSize: previewShadowSize,
+    });
+  }, [effectiveHarmonyRamp, previewBackground, previewHighlightSize, previewShadowSize, previewTemplate]);
 
   const copyHexRow = (hex: string) => {
     onCopyHex(hex);
@@ -214,7 +179,7 @@ export const HarmonyAssistantPanel = ({
           'Choose 2-, 3-, or 4-tone cel ramps. Suggested shadow, base, light, and highlight are snapped to your imported palette.',
           'Click a palette swatch to set the base color (sky ring). Click a ramp or harmony row to select it (amber), then a swatch to override that slot—overrides are preview-only.',
           'Use Reset overrides to clear manual picks. Shadow↔base contrast hints help judge whether edges will read on small sprites.',
-          'Sprite preview: use Highlight size and Shadow size sliders—lower values shrink those bands (preview only; ramp hexes are unchanged).',
+          'Preview templates: switch between Sphere, Character, Enemy, Tile, UI, and Item with scale/background controls.',
         ]}
       />
 
@@ -272,7 +237,53 @@ export const HarmonyAssistantPanel = ({
 
             <div className="harmony-assistant-panel__sprite-preview rounded-lg border border-slate-200 p-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Sprite Preview</p>
-              <canvas ref={previewCanvasRef} width={160} height={160} className="h-40 w-40 rounded border border-slate-300" />
+              <div className="mb-2 grid gap-2 sm:grid-cols-3">
+                <select
+                  value={previewTemplate}
+                  onChange={(event) => setPreviewTemplate(event.target.value as PreviewTemplateId)}
+                  className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold"
+                  aria-label="Preview template"
+                >
+                  {PREVIEW_TEMPLATE_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={previewBackground}
+                  onChange={(event) => setPreviewBackground(event.target.value as PreviewBackgroundPreset)}
+                  className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold"
+                  aria-label="Preview background"
+                >
+                  {PREVIEW_BACKGROUND_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex rounded border border-slate-300 bg-white p-0.5">
+                  {([1, 2, 4, 8] as const).map((scale) => (
+                    <button
+                      key={scale}
+                      type="button"
+                      onClick={() => setPreviewScale(scale)}
+                      className={`rounded px-2 py-1 text-[10px] font-semibold ${
+                        previewScale === scale ? 'bg-sky-600 text-white' : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {scale}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <canvas
+                ref={previewCanvasRef}
+                width={64}
+                height={64}
+                style={{ width: `${64 * previewScale}px`, height: `${64 * previewScale}px`, imageRendering: 'pixelated' }}
+                className="rounded border border-slate-300"
+              />
               <div className="mt-3 space-y-3">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between gap-2">

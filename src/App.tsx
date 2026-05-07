@@ -4,13 +4,16 @@ import { WorkspaceTabBar } from './components/WorkspaceTabBar';
 import { ContrastLabPanel } from './components/tabs/ContrastLabPanel';
 import { HarmonyAssistantPanel } from './components/tabs/HarmonyAssistantPanel';
 import { PaletteBuilderPanel } from './components/tabs/PaletteBuilderPanel';
+import { PaletteAuthoringPanel } from './components/tabs/PaletteAuthoringPanel';
+import { AssetValidatorPanel } from './components/tabs/AssetValidatorPanel';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { fetchColorName } from './services/colorApi';
 import { BUILT_IN_PALETTES, DEFAULT_BASE_PALETTE_ID } from './data/defaultPalette';
-import type { PaletteColor, SavedPalette, SortMode, WorkspaceTab } from './types';
+import type { PaletteColor, PaletteGroup, SavedPalette, SortMode, WorkspaceTab } from './types';
 import { sortColorsByHue, sortColorsByLightness, sortColorsByName } from './utils/colorSort';
 import { contrastRatioHex } from './utils/colorSpace';
 import { parseHexInput } from './utils/hexParser';
+import { autoGroupPaletteColors, normalizePaletteGroups } from './utils/paletteGrouping';
 import {
   COMPACT_MAP_COLUMNS,
   STORAGE_KEYS,
@@ -25,6 +28,7 @@ const App = () => {
   const [colors, setColors] = useState<PaletteColor[]>([]);
   const [toast, setToast] = useState('');
   const [isLoadingNames, setIsLoadingNames] = useState(false);
+  const [paletteGroups, setPaletteGroups] = useState<PaletteGroup[]>([]);
   const [savedPalettes, setSavedPalettes] = useLocalStorage<SavedPalette[]>(
     STORAGE_KEYS.library,
     BUILT_IN_PALETTES,
@@ -84,6 +88,7 @@ const App = () => {
 
     setPaletteName(activePalette.name);
     setColors(activePalette.colors);
+    setPaletteGroups(normalizePaletteGroups(activePalette.groups ?? autoGroupPaletteColors(activePalette.colors), activePalette.colors));
     setInput(activePalette.sourceText ?? formatExport(activePalette.colors));
   }, [activePalette]);
 
@@ -109,6 +114,7 @@ const App = () => {
     );
     setIsLoadingNames(false);
     setColors(namedColors);
+    setPaletteGroups(autoGroupPaletteColors(namedColors));
     showToast(`Loaded ${namedColors.length} colors`);
   };
 
@@ -139,6 +145,7 @@ const App = () => {
           id: createPaletteId(),
           name: fileNameWithoutExtension || file.name || 'Imported Palette',
           colors: colorsWithNames,
+          groups: autoGroupPaletteColors(colorsWithNames),
           sourceText: text,
           lastUpdated: new Date().toISOString(),
           builtIn: false,
@@ -234,6 +241,7 @@ const App = () => {
 
   const clearWorkspace = () => {
     setColors([]);
+    setPaletteGroups([]);
     setInput('');
     showToast('Workspace cleared');
   };
@@ -258,6 +266,10 @@ const App = () => {
       id,
       name: trimmedName,
       colors,
+      groups: normalizePaletteGroups(paletteGroups, colors).map((group, index) => ({
+        ...group,
+        name: group.name.trim() || `Group ${index + 1}`,
+      })),
       sourceText: input,
       lastUpdated: new Date().toISOString(),
       builtIn: false,
@@ -278,10 +290,112 @@ const App = () => {
   const loadPalette = (palette: SavedPalette) => {
     setPaletteName(palette.name);
     setColors(palette.colors);
+    setPaletteGroups(normalizePaletteGroups(palette.groups ?? autoGroupPaletteColors(palette.colors), palette.colors));
     setInput(palette.sourceText ?? formatExport(palette.colors));
     setActivePaletteId(palette.id);
     setShowLibrary(false);
     showToast(`Loaded "${palette.name}"`);
+  };
+
+  const regenerateGroups = () => {
+    if (colors.length === 0) {
+      showToast('Import colors before grouping');
+      return;
+    }
+    setPaletteGroups(autoGroupPaletteColors(colors));
+    showToast('Groups regenerated');
+  };
+
+  const renameGroup = (groupId: string, name: string) => {
+    setPaletteGroups((previous) => previous.map((group) => (group.id === groupId ? { ...group, name } : group)));
+  };
+
+  const createGroup = () => {
+    setPaletteGroups((previous) => [
+      ...previous,
+      {
+        id: `group-${crypto.randomUUID()}`,
+        name: `Group ${previous.length + 1}`,
+        colorHexes: [],
+      },
+    ]);
+  };
+
+  const deleteGroup = (groupId: string) => {
+    setPaletteGroups((previous) => normalizePaletteGroups(previous.filter((group) => group.id !== groupId), colors));
+  };
+
+  const moveColorToGroup = (hex: string, targetGroupId: string) => {
+    setPaletteGroups((previous) =>
+      normalizePaletteGroups(
+        previous.map((group) => ({
+          ...group,
+          colorHexes:
+            group.id === targetGroupId
+              ? [...group.colorHexes.filter((item) => item !== hex), hex]
+              : group.colorHexes.filter((item) => item !== hex),
+        })),
+        colors,
+      ),
+    );
+  };
+
+  useEffect(() => {
+    setPaletteGroups((previous) => normalizePaletteGroups(previous, colors));
+  }, [colors]);
+
+  const commitAuthoringRamp = async (rampHexes: string[], groupName: string | null) => {
+    if (isLoadingNames) {
+      showToast('Please wait for current add to finish');
+      return;
+    }
+
+    const sanitizedRamp = [...new Set(rampHexes.map((hex) => hex.trim().toUpperCase()))]
+      .filter((hex) => /^[0-9A-F]{6}$/.test(hex))
+      .slice(0, 5);
+
+    if (sanitizedRamp.length === 0) {
+      showToast('No ramp colors to add');
+      return;
+    }
+    setIsLoadingNames(true);
+    const existingMap = new Map(colors.map((color) => [color.hex, color.name]));
+    const existingHexSet = new Set(colors.map((color) => color.hex));
+    const deduped = [...new Set([...colors.map((color) => color.hex), ...sanitizedRamp])];
+    const mergedColors = await Promise.all(
+      deduped.map(async (hex) => ({
+        hex,
+        name: existingMap.get(hex) ?? (await fetchColorName(hex)),
+      })),
+    );
+    setIsLoadingNames(false);
+    setColors(mergedColors);
+    setInput(formatExport(mergedColors));
+    if (groupName) {
+      setPaletteGroups((previous) => {
+        const normalized = normalizePaletteGroups(previous, mergedColors);
+        const groupId = normalized.find((group) => group.name.toLowerCase() === groupName.toLowerCase())?.id;
+        if (!groupId) {
+          const next = [
+            ...normalized,
+            {
+              id: `group-${crypto.randomUUID()}`,
+              name: groupName,
+              colorHexes: sanitizedRamp,
+            },
+          ];
+          return normalizePaletteGroups(next, mergedColors);
+        }
+        return normalizePaletteGroups(
+          normalized.map((group) =>
+            group.id === groupId ? { ...group, colorHexes: [...group.colorHexes, ...sanitizedRamp] } : group,
+          ),
+          mergedColors,
+        );
+      });
+    }
+    const addedCount = sanitizedRamp.filter((hex) => !existingHexSet.has(hex)).length;
+    showToast(addedCount > 0 ? `Added ${addedCount} ramp colors` : 'Ramp already present');
   };
 
   const deletePalette = (paletteId: string, paletteNameValue: string) => {
@@ -385,8 +499,23 @@ const App = () => {
             onSavePalette={savePalette}
             displayColors={displayColors}
             colors={colors}
+            paletteGroups={paletteGroups}
+            onRegenerateGroups={regenerateGroups}
+            onRenameGroup={renameGroup}
+            onCreateGroup={createGroup}
+            onDeleteGroup={deleteGroup}
+            onMoveColorToGroup={moveColorToGroup}
             onCopyHex={copyHex}
             onExportPaletteImage={exportPaletteImage}
+          />
+        ) : workspaceTab === 'authoring' ? (
+          <PaletteAuthoringPanel
+            paletteHexes={masterPalette}
+            paletteGroups={paletteGroups}
+            isBusy={isLoadingNames}
+            onSavePalette={savePalette}
+            onCopyHex={copyHex}
+            onCommitRamp={commitAuthoringRamp}
           />
         ) : workspaceTab === 'contrast' ? (
           <ContrastLabPanel
@@ -401,13 +530,15 @@ const App = () => {
             onDragStart={handleDragStart}
             allowDrop={allowDrop}
           />
-        ) : (
+        ) : workspaceTab === 'harmony' ? (
           <HarmonyAssistantPanel
             masterPalette={masterPalette}
             activePaletteLabel={activePaletteLabel}
             onToast={showToast}
             onCopyHex={copyHex}
           />
+        ) : (
+          <AssetValidatorPanel paletteHexes={masterPalette} activePaletteLabel={activePaletteLabel} onToast={showToast} />
         )}
       </main>
 
